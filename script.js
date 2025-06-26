@@ -375,10 +375,51 @@ function saveState() {
     }
 }
 
+// 兼容性增强：优先使用mp3，若不支持则回退到wav
+function getSupportedAudioFile(baseName) {
+    const audio = document.createElement('audio');
+    if (audio.canPlayType('audio/mpeg')) {
+        return `src/resources/sounds/${baseName}.mp3`;
+    } else {
+        return `src/resources/sounds/${baseName}.wav`;
+    }
+}
+
+const soundFiles = {
+    move: getSupportedAudioFile('move'),
+    merge: getSupportedAudioFile('merge'),
+    gameover: getSupportedAudioFile('gameover'),
+    reset: getSupportedAudioFile('reset'),
+    skin: getSupportedAudioFile('skin'),
+    undo: getSupportedAudioFile('undo')
+};
+
+// 只在用户首次交互时预加载并"解锁"音频
+let audioUnlocked = false;
+function unlockAudio() {
+    for (const key in soundFiles) {
+        // 新建对象并静音播放一次，解锁后续播放
+        const audio = new Audio(soundFiles[key]);
+        audio.muted = true;
+        audio.play().catch(() => {});
+        audio.pause();
+        audio.muted = false;
+        audio.currentTime = 0;
+    }
+    audioUnlocked = true;
+    window.removeEventListener('touchstart', unlockAudio, true);
+    window.removeEventListener('mousedown', unlockAudio, true);
+}
+window.addEventListener('touchstart', unlockAudio, true);
+window.addEventListener('mousedown', unlockAudio, true);
+
+// 每次播放都新建 Audio 对象，兼容性最强
 function playSound(type) {
-    if (!soundEnabled) return;
-    const audio = new Audio(`src/resources/sounds/${type}.wav`);
-    audio.play();
+    if (!soundEnabled || !audioUnlocked) return;
+    const src = soundFiles[type];
+    if (!src) return;
+    const audio = new Audio(src);
+    audio.play().catch(() => {});
 }
 
 function handleKeyPress(e) {
@@ -457,6 +498,11 @@ function handleTouchEnd(e) {
         playSound('move');
     }
 }
+
+// 阻止触摸滑动导致页面滚动
+gameBoard.addEventListener('touchmove', function(e) {
+    e.preventDefault();
+}, { passive: false });
 
 // 初始化
 bestScoreElement.textContent = bestScore;
